@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,9 +27,26 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col transition-colors duration-300">
+        <Script id="theme-init" strategy="beforeInteractive">{`
+          (function () {
+            try {
+              var raw = localStorage.getItem("saas-theme");
+              var pref = "system";
+              if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && parsed.state && parsed.state.theme) pref = parsed.state.theme;
+              }
+              var isDark = pref === "dark" || (pref === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+              document.documentElement.classList.toggle("dark", !!isDark);
+            } catch (e) {}
+          })();
+        `}</Script>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }
