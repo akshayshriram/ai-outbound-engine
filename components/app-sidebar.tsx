@@ -18,10 +18,28 @@ export function AppSidebar() {
 
       <nav className="flex-1 px-2 py-3">
         <Link
-          href="/"
+          href="/dashboard"
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors duration-300"
         >
           Dashboard
+        </Link>
+        <Link
+          href="/leads"
+          className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-300"
+        >
+          Leads
+        </Link>
+        <Link
+          href="/campaigns"
+          className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-300"
+        >
+          Campaigns
+        </Link>
+        <Link
+          href="/settings/email-accounts"
+          className="mt-1 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-300"
+        >
+          Email Accounts
         </Link>
         <Link
           href="/protected"
