@@ -1,15 +1,10 @@
-import * as React from 'react'
 import { redirect } from 'next/navigation'
 
-import { AppSidebar } from '@/components/app-sidebar'
 import { createClient } from '@/lib/supabase/server'
 import { getUserOrganizations } from '@/lib/services/org.service'
+import { OnboardingForm } from '@/app/onboarding/onboarding-form'
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function OnboardingPage() {
   const supabase = await createClient()
 
   const { data, error } = await supabase.auth.getClaims()
@@ -19,14 +14,15 @@ export default async function DashboardLayout({
 
   const userId = data.claims.sub
   const memberships = await getUserOrganizations(userId, supabase)
-  if (memberships.length === 0) {
-    redirect('/onboarding')
+  if (memberships.length > 0) {
+    redirect('/dashboard')
   }
 
   return (
-    <div className="flex min-h-svh w-full">
-      <AppSidebar />
-      <main className="flex-1 px-6 py-10">{children}</main>
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-md">
+        <OnboardingForm />
+      </div>
     </div>
   )
 }
