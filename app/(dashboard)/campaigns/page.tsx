@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { CampaignTable } from '@/components/shared/campaigns/campaign-table'
 import { CreateCampaignModal } from '@/components/shared/campaigns/create-campaign-modal'
 import { useCampaigns } from '@/lib/hooks/useCampaigns'
-import { useAppStore } from '@/lib/store/useAppStore'
+import { useAppStore } from '@/store/useAppStore'
 
 export default function CampaignsPage() {
   const { setIsCreateCampaignOpen } = useAppStore()

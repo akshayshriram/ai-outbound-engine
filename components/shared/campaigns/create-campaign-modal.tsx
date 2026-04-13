@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useAppStore } from '@/lib/store/useAppStore'
+import { useAppStore } from '@/store/useAppStore'
 import type { Database } from '@/utils/supabase/types/database'
 
 type CampaignStatus = Database['public']['Enums']['campaign_status']

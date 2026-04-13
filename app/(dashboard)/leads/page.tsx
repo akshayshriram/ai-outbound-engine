@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { LeadTable } from '@/components/shared/leads/lead-table'
 import { CreateLeadModal } from '@/components/shared/leads/create-lead-modal'
 import { useLeads } from '@/lib/hooks/useLeads'
-import { useAppStore } from '@/lib/store/useAppStore'
+import { useAppStore } from '@/store/useAppStore'
 
 export default function LeadsPage() {
   const pageSize = 10

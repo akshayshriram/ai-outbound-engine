@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useAppStore } from '@/lib/store/useAppStore'
+import { useAppStore } from '@/store/useAppStore'
 
 export function CreateLeadModal() {
   const queryClient = useQueryClient()

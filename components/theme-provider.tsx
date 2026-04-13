@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { useThemeStore } from "@/lib/stores/theme-store";
+import { useThemeStore } from "@/store/useThemeStore";
 
 function resolveTheme(theme: "light" | "dark" | "system") {
   if (theme !== "system") return theme;
