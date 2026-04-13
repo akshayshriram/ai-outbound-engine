@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 
 type OrganizationRow = Database['public']['Tables']['organizations']['Row']
 type OrganizationInsert = Database['public']['Tables']['organizations']['Insert']

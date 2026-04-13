@@ -6,7 +6,7 @@ import {
   listCampaigns,
   type ListCampaignsParams,
 } from '@/lib/services/campaigns.service'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 
 type CampaignRow = Database['public']['Tables']['campaigns']['Row']
 

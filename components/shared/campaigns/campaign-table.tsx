@@ -5,7 +5,7 @@ import * as React from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { DataTable, type DataTableColumn } from '@/components/shared/data-table'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 
 type CampaignRow = Database['public']['Tables']['campaigns']['Row']
 type CampaignStatus = Database['public']['Enums']['campaign_status']

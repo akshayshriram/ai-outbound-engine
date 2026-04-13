@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { createClient } from '@/lib/supabase/client'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 
 type EmailAccountRow = Database['public']['Tables']['email_accounts']['Row']
 

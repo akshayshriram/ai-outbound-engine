@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CampaignLeadsTable } from '@/components/shared/campaigns/campaign-leads-table'
 import { type CampaignLeadRowWithLeadEmail } from '@/components/shared/campaigns/campaign-leads-table'
 import { getCampaignById, listCampaignLeadsWithLeadEmail } from '@/lib/services/campaigns.service'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 import Link from 'next/link'
 
 type CampaignStatus = Database['public']['Enums']['campaign_status']

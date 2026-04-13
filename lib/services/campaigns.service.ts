@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 
 type CampaignRow = Database['public']['Tables']['campaigns']['Row']
 type LeadRow = Database['public']['Tables']['leads']['Row']

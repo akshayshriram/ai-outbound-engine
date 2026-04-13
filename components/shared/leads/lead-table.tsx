@@ -4,7 +4,7 @@ import * as React from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { DataTable, type DataTableColumn } from '@/components/shared/data-table'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 
 type LeadRow = Database['public']['Tables']['leads']['Row']
 type LeadStatus = Database['public']['Enums']['lead_status']

@@ -390,7 +390,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_bootstrap_org_membership: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: boolean
+      }
+      is_org_admin_or_owner: {
+        Args: { check_org_id: string }
+        Returns: boolean
+      }
+      is_org_member: { Args: { check_org_id: string }; Returns: boolean }
+      is_org_owner: { Args: { check_org_id: string }; Returns: boolean }
     }
     Enums: {
       campaign_lead_status: "pending" | "sent" | "replied" | "failed"

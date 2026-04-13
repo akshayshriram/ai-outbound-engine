@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { listLeads, type ListLeadsParams } from '@/lib/services/leads.service'
-import type { Database } from '@/utils/supabase/types/database'
+import type { Database } from '@/types/database'
 
 type LeadRow = Database['public']['Tables']['leads']['Row']
 
