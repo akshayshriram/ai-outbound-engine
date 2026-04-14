@@ -39,12 +39,6 @@ export async function createOrganization(
 
     if (orgError) throw new Error(orgError.message)
 
-    const { error: membershipInsertError } = await supabase
-      .from('org_members')
-      .insert({ org_id: organizationId, user_id: userId, role: 'owner' })
-
-    if (membershipInsertError) throw new Error(membershipInsertError.message)
-
     const { data: membership, error: memberError } = await supabase
       .from('org_members')
       .select('id, org_id, user_id, role, created_at')
