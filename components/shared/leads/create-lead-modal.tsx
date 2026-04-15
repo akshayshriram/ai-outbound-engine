@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 import {
   Dialog,
@@ -12,11 +12,12 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useCreateLead } from '@/lib/hooks/useLeads'
 import { useAppStore } from '@/store/useAppStore'
 
 export function CreateLeadModal() {
-  const queryClient = useQueryClient()
   const { isCreateLeadOpen, setIsCreateLeadOpen } = useAppStore()
+  const createLeadMutation = useCreateLead()
 
   const [firstName, setFirstName] = React.useState('')
   const [lastName, setLastName] = React.useState('')
@@ -31,14 +32,22 @@ export function CreateLeadModal() {
     setCompany('')
   }, [isCreateLeadOpen])
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Mock create for now (production: insert into `leads`)
-    console.log('Create lead', { firstName, lastName, email, company })
-
-    setIsCreateLeadOpen(false)
-    queryClient.invalidateQueries({ queryKey: ['leads'] })
+    try {
+      await createLeadMutation.mutateAsync({
+        firstName,
+        lastName,
+        email,
+        company,
+      })
+      toast.success('Lead created.')
+      setIsCreateLeadOpen(false)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to create lead.'
+      toast.error(message)
+    }
   }
 
   return (
@@ -47,7 +56,7 @@ export function CreateLeadModal() {
         <DialogHeader>
           <DialogTitle>Add Lead</DialogTitle>
           <DialogDescription>
-            Add a lead to your outbound pipeline. (Mock action)
+            Add a lead to your outbound pipeline.
           </DialogDescription>
         </DialogHeader>
 
@@ -85,11 +94,14 @@ export function CreateLeadModal() {
             <Button
               type="button"
               variant="ghost"
+              disabled={createLeadMutation.isPending}
               onClick={() => setIsCreateLeadOpen(false)}
             >
               Cancel
             </Button>
-            <Button type="submit">Create</Button>
+            <Button type="submit" disabled={createLeadMutation.isPending}>
+              {createLeadMutation.isPending ? 'Creating...' : 'Create'}
+            </Button>
           </div>
         </form>
       </DialogContent>

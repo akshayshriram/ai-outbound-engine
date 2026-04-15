@@ -1,8 +1,13 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { listLeads, type ListLeadsParams } from '@/lib/services/leads.service'
+import {
+  createLead,
+  listLeads,
+  type CreateLeadInput,
+  type ListLeadsParams,
+} from '@/lib/services/leads.service'
 import type { Database } from '@/types/database'
 
 type LeadRow = Database['public']['Tables']['leads']['Row']
@@ -35,5 +40,16 @@ export function useLeads({
     pageSize,
     refetch: query.refetch,
   }
+}
+
+export function useCreateLead() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: CreateLeadInput) => createLead(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
 }
 
