@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 import {
   Dialog,
@@ -12,14 +12,15 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useCreateCampaign } from '@/lib/hooks/useCampaigns'
 import { useAppStore } from '@/store/useAppStore'
 import type { Database } from '@/types/database'
 
 type CampaignStatus = Database['public']['Enums']['campaign_status']
 
 export function CreateCampaignModal() {
-  const queryClient = useQueryClient()
   const { isCreateCampaignOpen, setIsCreateCampaignOpen } = useAppStore()
+  const createCampaignMutation = useCreateCampaign()
 
   const [name, setName] = React.useState('')
   const [status, setStatus] = React.useState<CampaignStatus>('draft')
@@ -30,14 +31,17 @@ export function CreateCampaignModal() {
     setStatus('draft')
   }, [isCreateCampaignOpen])
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Mock create for now (production: insert into `campaigns`)
-    console.log('Create campaign', { name, status })
-
-    setIsCreateCampaignOpen(false)
-    queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    try {
+      await createCampaignMutation.mutateAsync({ name, status })
+      toast.success('Campaign created.')
+      setIsCreateCampaignOpen(false)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to create campaign.'
+      toast.error(message)
+    }
   }
 
   return (
@@ -46,7 +50,7 @@ export function CreateCampaignModal() {
         <DialogHeader>
           <DialogTitle>Create Campaign</DialogTitle>
           <DialogDescription>
-            Start a new outbound campaign. (Mock action)
+            Start a new outbound campaign.
           </DialogDescription>
         </DialogHeader>
 
@@ -77,11 +81,14 @@ export function CreateCampaignModal() {
             <Button
               type="button"
               variant="ghost"
+              disabled={createCampaignMutation.isPending}
               onClick={() => setIsCreateCampaignOpen(false)}
             >
               Cancel
             </Button>
-            <Button type="submit">Create</Button>
+            <Button type="submit" disabled={createCampaignMutation.isPending}>
+              {createCampaignMutation.isPending ? 'Creating...' : 'Create'}
+            </Button>
           </div>
         </form>
       </DialogContent>

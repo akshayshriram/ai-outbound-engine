@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,8 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CampaignLeadsTable } from '@/components/shared/campaigns/campaign-leads-table'
 import { type CampaignLeadRowWithLeadEmail } from '@/components/shared/campaigns/campaign-leads-table'
 import { getCampaignById, listCampaignLeadsWithLeadEmail } from '@/lib/services/campaigns.service'
+import {
+  useAddLeadToCampaign,
+  useAvailableLeadsForCampaign,
+} from '@/lib/hooks/useCampaigns'
 import type { Database } from '@/types/database'
 import Link from 'next/link'
+import { use } from 'react'
 
 type CampaignStatus = Database['public']['Enums']['campaign_status']
 
@@ -34,9 +40,10 @@ function campaignStatusBadge(status: CampaignStatus) {
 export default function CampaignDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const campaignId = params.id
+  const { id } = use(params)
+  const campaignId = id
 
   const {
     data: campaign,
@@ -60,6 +67,43 @@ export default function CampaignDetailPage({
       (await listCampaignLeadsWithLeadEmail(campaignId)) as CampaignLeadRowWithLeadEmail[],
     enabled: !!campaignId,
   })
+
+  const {
+    data: availableLeads,
+    isLoading: isAvailableLeadsLoading,
+    isError: isAvailableLeadsError,
+    error: availableLeadsError,
+  } = useAvailableLeadsForCampaign(campaignId)
+  const addLeadMutation = useAddLeadToCampaign(campaignId)
+  const [selectedLeadId, setSelectedLeadId] = React.useState('')
+
+  React.useEffect(() => {
+    if ((availableLeads ?? []).length === 0) {
+      setSelectedLeadId('')
+      return
+    }
+
+    setSelectedLeadId((prev) => {
+      if (prev && (availableLeads ?? []).some((lead) => lead.id === prev)) {
+        return prev
+      }
+      return availableLeads?.[0]?.id ?? ''
+    })
+  }, [availableLeads])
+
+  const onAddLead = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedLeadId) return
+
+    try {
+      await addLeadMutation.mutateAsync({ leadId: selectedLeadId })
+      toast.success('Lead added to campaign.')
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to add lead to campaign.'
+      toast.error(message)
+    }
+  }
 
   return (
     <div>
@@ -127,6 +171,55 @@ export default function CampaignDetailPage({
       <Card>
         <CardHeader className="border-b border-border">
           <CardTitle>Campaign Leads</CardTitle>
+          <div className="pt-3">
+            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={onAddLead}>
+              <select
+                className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={selectedLeadId}
+                onChange={(e) => setSelectedLeadId(e.target.value)}
+                disabled={
+                  isAvailableLeadsLoading ||
+                  addLeadMutation.isPending ||
+                  (availableLeads?.length ?? 0) === 0
+                }
+              >
+                {(availableLeads ?? []).map((lead) => {
+                  const fullName = [lead.first_name, lead.last_name]
+                    .filter(Boolean)
+                    .join(' ')
+                    .trim()
+                  const label = fullName ? `${fullName} (${lead.email})` : lead.email
+                  return (
+                    <option key={lead.id} value={lead.id}>
+                      {label}
+                    </option>
+                  )
+                })}
+              </select>
+              <Button
+                type="submit"
+                disabled={
+                  !selectedLeadId ||
+                  isAvailableLeadsLoading ||
+                  addLeadMutation.isPending
+                }
+              >
+                {addLeadMutation.isPending ? 'Adding...' : 'Add Lead'}
+              </Button>
+            </form>
+            {isAvailableLeadsError ? (
+              <div className="pt-2 text-sm text-muted-foreground">
+                {availableLeadsError instanceof Error
+                  ? availableLeadsError.message
+                  : 'Unable to load available leads.'}
+              </div>
+            ) : null}
+            {!isAvailableLeadsLoading && (availableLeads?.length ?? 0) === 0 ? (
+              <div className="pt-2 text-sm text-muted-foreground">
+                All leads in this workspace are already in this campaign.
+              </div>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="pt-4">
           {isLeadsLoading ? (
