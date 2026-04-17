@@ -11,7 +11,10 @@ type CampaignLeadStatus =
   Database['public']['Enums']['campaign_lead_status']
 
 export type CampaignLeadRowWithLeadEmail = CampaignLeadRow & {
-  leads: Pick<Database['public']['Tables']['leads']['Row'], 'email'>
+  leads: Pick<
+    Database['public']['Tables']['leads']['Row'],
+    'email' | 'first_name' | 'last_name' | 'company'
+  >
 }
 
 function campaignLeadStatusBadge(status: CampaignLeadStatus) {
@@ -31,19 +34,65 @@ function campaignLeadStatusBadge(status: CampaignLeadStatus) {
 
 export function CampaignLeadsTable({
   rows,
+  selectedRowIds,
+  onSelectedRowIdsChange,
 }: {
   rows: CampaignLeadRowWithLeadEmail[]
+  selectedRowIds?: string[]
+  onSelectedRowIdsChange?: (ids: string[]) => void
 }) {
   const columns = React.useMemo<DataTableColumn<CampaignLeadRowWithLeadEmail>[]>(
     () => [
+      {
+        id: 'select',
+        header: (
+          <input
+            type="checkbox"
+            aria-label="Select all leads"
+            className="size-4 rounded border-border align-middle"
+            checked={rows.length > 0 && rows.every((row) => selectedRowIds?.includes(row.id))}
+            onChange={(event) => {
+              if (!onSelectedRowIdsChange) return
+              onSelectedRowIdsChange(event.target.checked ? rows.map((row) => row.id) : [])
+            }}
+          />
+        ),
+        cell: (row) => (
+          <input
+            type="checkbox"
+            aria-label={`Select ${row.leads.email ?? 'lead'}`}
+            className="size-4 rounded border-border align-middle"
+            checked={selectedRowIds?.includes(row.id) ?? false}
+            onChange={(event) => {
+              if (!onSelectedRowIdsChange) return
+              onSelectedRowIdsChange(
+                event.target.checked
+                  ? [...(selectedRowIds ?? []), row.id]
+                  : (selectedRowIds ?? []).filter((id) => id !== row.id),
+              )
+            }}
+          />
+        ),
+        className: 'w-12',
+      },
       {
         id: 'email',
         header: 'Lead email',
         cell: (row) => (
           <div className="min-w-[220px]">
-            {row.leads.email ?? '-'}
+            <div className="font-medium text-foreground">{row.leads.email ?? '-'}</div>
+            <div className="text-xs text-muted-foreground">
+              {[row.leads.first_name, row.leads.last_name].filter(Boolean).join(' ') ||
+                row.leads.company ||
+                'No lead details'}
+            </div>
           </div>
         ),
+      },
+      {
+        id: 'company',
+        header: 'Company',
+        cell: (row) => <div>{row.leads.company ?? '-'}</div>,
       },
       {
         id: 'status',
@@ -69,7 +118,7 @@ export function CampaignLeadsTable({
         ),
       },
     ],
-    [],
+    [onSelectedRowIdsChange, rows, selectedRowIds],
   )
 
   return (

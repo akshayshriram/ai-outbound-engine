@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +10,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CampaignLeadsTable } from '@/components/shared/campaigns/campaign-leads-table'
 import { type CampaignLeadRowWithLeadEmail } from '@/components/shared/campaigns/campaign-leads-table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { getCampaignById, listCampaignLeadsWithLeadEmail } from '@/lib/services/campaigns.service'
 import {
   useAddLeadToCampaign,
@@ -76,6 +85,51 @@ export default function CampaignDetailPage({
   } = useAvailableLeadsForCampaign(campaignId)
   const addLeadMutation = useAddLeadToCampaign(campaignId)
   const [selectedLeadId, setSelectedLeadId] = React.useState('')
+  const [selectedCampaignLeadIds, setSelectedCampaignLeadIds] = React.useState<string[]>([])
+  const [isGenerateDialogOpen, setIsGenerateDialogOpen] = React.useState(false)
+  const [generationContext, setGenerationContext] = React.useState('')
+  const [generatedTemplate, setGeneratedTemplate] = React.useState<{
+    subject: string
+    body: string
+  } | null>(null)
+
+  const generateTemplateMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/campaign/${campaignId}/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          context: generationContext,
+          selectedLeadIds: selectedCampaignLeadIds,
+        }),
+      })
+
+      const data = (await response.json()) as
+        | { subject?: string; body?: string; error?: string }
+        | undefined
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to generate email template.')
+      }
+
+      if (!data?.subject || !data.body) {
+        throw new Error('The AI response did not return a valid template.')
+      }
+
+      return { subject: data.subject, body: data.body }
+    },
+    onSuccess: (template) => {
+      setGeneratedTemplate(template)
+      toast.success('Email template generated.')
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to generate email template.',
+      )
+    },
+  })
 
   React.useEffect(() => {
     if ((availableLeads ?? []).length === 0) {
@@ -91,6 +145,13 @@ export default function CampaignDetailPage({
     })
   }, [availableLeads])
 
+  React.useEffect(() => {
+    setSelectedCampaignLeadIds((prev) => {
+      const validIds = new Set((campaignLeads ?? []).map((lead) => lead.id))
+      return prev.filter((id) => validIds.has(id))
+    })
+  }, [campaignLeads])
+
   const onAddLead = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedLeadId) return
@@ -105,6 +166,34 @@ export default function CampaignDetailPage({
     }
   }
 
+  const selectedLeads = React.useMemo(
+    () => (campaignLeads ?? []).filter((lead) => selectedCampaignLeadIds.includes(lead.id)),
+    [campaignLeads, selectedCampaignLeadIds],
+  )
+
+  const onOpenGenerateDialog = () => {
+    if (selectedCampaignLeadIds.length === 0) {
+      toast.error('Select at least one campaign lead to generate a template.')
+      return
+    }
+
+    setIsGenerateDialogOpen(true)
+  }
+
+  const onGenerateTemplate = async () => {
+    if (!generationContext.trim()) {
+      toast.error('Add a little context so the email feels relevant.')
+      return
+    }
+
+    if (selectedCampaignLeadIds.length === 0) {
+      toast.error('Select at least one campaign lead to continue.')
+      return
+    }
+
+    await generateTemplateMutation.mutateAsync()
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-4">
@@ -116,9 +205,21 @@ export default function CampaignDetailPage({
             View campaign details and contacts.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/campaigns">Back</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={onOpenGenerateDialog}
+            disabled={(campaignLeads?.length ?? 0) === 0}
+            className="border border-primary/30 bg-linear-to-r from-primary to-primary/70 text-primary-foreground shadow-[0_0_24px_rgba(59,130,246,0.18)]"
+          >
+            <Sparkles className="mr-2 size-4" />
+            Generate Emails
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/campaigns">Back</Link>
+          </Button>
+        </div>
       </div>
 
       {isCampaignLoading ? (
@@ -170,7 +271,17 @@ export default function CampaignDetailPage({
 
       <Card>
         <CardHeader className="border-b border-border">
-          <CardTitle>Campaign Leads</CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Campaign Leads</CardTitle>
+              <p className="pt-1 text-sm text-muted-foreground">
+                Select leads to shape the AI template, then personalize later with placeholders.
+              </p>
+            </div>
+            <div className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs text-primary">
+              {selectedCampaignLeadIds.length} selected
+            </div>
+          </div>
           <div className="pt-3">
             <form className="flex flex-col gap-2 sm:flex-row" onSubmit={onAddLead}>
               <select
@@ -238,10 +349,129 @@ export default function CampaignDetailPage({
           {!isLeadsLoading && !isLeadsError ? (
             <CampaignLeadsTable
               rows={(campaignLeads ?? []) as CampaignLeadRowWithLeadEmail[]}
+              selectedRowIds={selectedCampaignLeadIds}
+              onSelectedRowIdsChange={setSelectedCampaignLeadIds}
             />
           ) : null}
         </CardContent>
       </Card>
+
+      <Dialog open={isGenerateDialogOpen} onOpenChange={setIsGenerateDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" />
+              Generate Email Template
+            </DialogTitle>
+            <DialogDescription>
+              Create one campaign-level cold email template with placeholder variables like
+              {' '}
+              <code>{'{{first_name}}'}</code>
+              {' '}
+              and
+              {' '}
+              <code>{'{{company}}'}</code>
+              . Lead data will be injected later during Gmail sending.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr] max-h-[500px] overflow-y-auto">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-primary/20 bg-linear-to-br from-primary/10 to-transparent p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Sparkles className="size-4 text-primary" />
+                  AI guidance
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Describe your offer, who this campaign targets, and why the message should feel relevant.
+                  The generator will keep the email short, human, and non-spammy.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="email-generation-context" className="text-sm font-medium">
+                  Campaign context
+                </label>
+                <textarea
+                  id="email-generation-context"
+                  className="min-h-40 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Example: We help B2B SaaS teams book more qualified demos by automating research-heavy outbound without sounding templated."
+                  value={generationContext}
+                  onChange={(event) => setGenerationContext(event.target.value)}
+                />
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <div className="text-sm font-medium">Selected leads</div>
+                <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  {selectedLeads.map((lead) => (
+                    <div key={lead.id} className="rounded-lg border border-border/60 px-3 py-2">
+                      <div className="font-medium text-foreground">
+                        {lead.leads.first_name || 'Unknown'} · {lead.leads.email}
+                      </div>
+                      <div>{lead.leads.company || 'No company added'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
+              <div>
+                <div className="text-sm font-medium">Generated preview</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This is the reusable template for the campaign. Lead placeholders stay intact for later sending.
+                </p>
+              </div>
+
+              {generatedTemplate ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Subject
+                    </div>
+                    <div className="mt-1 text-sm font-medium text-foreground">
+                      {generatedTemplate.subject}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border/60 bg-background p-3">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Body
+                    </div>
+                    <pre className="mt-2 whitespace-pre-wrap wrap-break-word font-sans text-sm text-foreground">
+                      {generatedTemplate.body}
+                    </pre>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-border px-4 text-center text-sm text-muted-foreground">
+                  Generate a template to preview the subject and email body here.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsGenerateDialogOpen(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={onGenerateTemplate}
+              disabled={generateTemplateMutation.isPending || selectedCampaignLeadIds.length === 0}
+              className="bg-primary text-primary-foreground"
+            >
+              {generateTemplateMutation.isPending
+                ? 'Generating...'
+                : 'Generate Email Template'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

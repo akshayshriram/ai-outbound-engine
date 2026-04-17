@@ -53,7 +53,7 @@ export async function getCampaignById(
 }
 
 export type CampaignLeadRowWithLeadEmail = CampaignLeadRow & {
-  leads: Pick<LeadRow, 'email'>
+  leads: Pick<LeadRow, 'email' | 'first_name' | 'last_name' | 'company'>
 }
 
 export async function listCampaignLeadsWithLeadEmail(
@@ -63,7 +63,7 @@ export async function listCampaignLeadsWithLeadEmail(
 
   const { data, error } = await supabase
     .from('campaign_leads')
-    .select('id, status, last_contacted_at, lead_id, leads(email)')
+    .select('id, status, last_contacted_at, lead_id, leads(email, first_name, last_name, company)')
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })
 
