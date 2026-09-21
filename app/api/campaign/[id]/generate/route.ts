@@ -1,4 +1,5 @@
 import { openai } from '@ai-sdk/openai'
+import { google } from '@ai-sdk/google';
 import { generateText } from 'ai'
 import { NextResponse } from 'next/server'
 
@@ -104,7 +105,7 @@ export async function POST(
             .join('\n')
 
         const { text } = await generateText({
-            model: openai('gpt-4o-mini'),
+            model: google('gemini-2.5-flash'),
             system: `You are an expert outbound sales representative specializing in writing highly personalized cold emails.
 
 Your goal is to write concise, human-like, and non-spammy outreach emails that feel like they were written manually.
