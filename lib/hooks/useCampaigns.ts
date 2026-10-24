@@ -7,10 +7,12 @@ import {
   createCampaign,
   listAvailableLeadsForCampaign,
   listCampaigns,
+  updateCampaignEmailTemplate,
   type AddLeadToCampaignInput,
   type CampaignLeadOption,
   type CreateCampaignInput,
   type ListCampaignsParams,
+  type UpdateCampaignEmailTemplateInput,
 } from '@/lib/services/campaigns.service'
 import type { Database } from '@/types/database'
 
@@ -46,6 +48,19 @@ export function useCreateCampaign() {
     mutationFn: async (input: CreateCampaignInput) => createCampaign(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+    },
+  })
+}
+
+export function useUpdateCampaignEmailTemplate(campaignId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (
+      input: Omit<UpdateCampaignEmailTemplateInput, 'campaignId'>,
+    ) => updateCampaignEmailTemplate({ campaignId, ...input }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
     },
   })
 }

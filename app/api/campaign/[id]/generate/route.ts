@@ -1,9 +1,15 @@
-import { openai } from '@ai-sdk/openai'
 import { google } from '@ai-sdk/google';
 import { generateText } from 'ai'
 import { NextResponse } from 'next/server'
 
+import {
+    buildCampaignEmailTemplate,
+    parseCampaignEmailTemplate,
+} from '@/lib/campaign-template'
 import { createClient } from '@/lib/supabase/server'
+import type { Database } from '@/types/database'
+
+type CampaignUpdate = Database['public']['Tables']['campaigns']['Update']
 
 type GenerateTemplateRequest = {
     context?: string
@@ -74,10 +80,14 @@ export async function POST(
             .select('id, name, org_id')
             .eq('id', id)
             .eq('org_id', membership.org_id)
-            .single()
+            .maybeSingle()
 
         if (campaignError) {
             throw new Error(campaignError.message)
+        }
+
+        if (!campaign) {
+            return NextResponse.json({ error: 'Campaign not found.' }, { status: 404 })
         }
 
         const { data: campaignLeads, error: leadsError } = await supabase
@@ -156,7 +166,33 @@ ${leadSummary}`,
 
         const template = parseTemplate(text)
 
-        return NextResponse.json(template)
+        const update: CampaignUpdate = {
+            email_template: buildCampaignEmailTemplate({
+                subject: template.subject,
+                body: template.body,
+                context: userContext,
+            }),
+        }
+
+        const { data: savedCampaign, error: saveError } = await supabase
+            .from('campaigns')
+            .update(update)
+            .eq('id', campaign.id)
+            .eq('org_id', membership.org_id)
+            .select('id, email_template')
+            .single()
+
+        if (saveError) {
+            throw new Error(saveError.message)
+        }
+
+        const savedTemplate = parseCampaignEmailTemplate(savedCampaign.email_template)
+
+        if (!savedTemplate) {
+            throw new Error('The generated template could not be saved to the campaign.')
+        }
+
+        return NextResponse.json(savedTemplate)
     } catch (error) {
         const message =
             error instanceof Error ? error.message : 'Unable to generate email template.'

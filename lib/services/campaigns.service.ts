@@ -1,8 +1,15 @@
+import {
+  applyCampaignEmailTemplateEdit,
+  buildCampaignEmailTemplate,
+  parseCampaignEmailTemplate,
+  type CampaignEmailTemplate,
+} from '@/lib/campaign-template'
 import { createClient } from '@/lib/supabase/client'
 import type { Database } from '@/types/database'
 
 type CampaignRow = Database['public']['Tables']['campaigns']['Row']
 type CampaignInsert = Database['public']['Tables']['campaigns']['Insert']
+type CampaignUpdate = Database['public']['Tables']['campaigns']['Update']
 type LeadRow = Database['public']['Tables']['leads']['Row']
 type CampaignLeadRow = Database['public']['Tables']['campaign_leads']['Row']
 type CampaignLeadInsert = Database['public']['Tables']['campaign_leads']['Insert']
@@ -44,12 +51,67 @@ export async function getCampaignById(
 
   const { data, error } = await supabase
     .from('campaigns')
-    .select('id, name, status, created_at, org_id')
+    .select('id, name, status, created_at, org_id, email_template')
     .eq('id', campaignId)
     .single()
 
   if (error) throw new Error(error.message)
   return data as CampaignRow
+}
+
+export type UpdateCampaignEmailTemplateInput = {
+  campaignId: string
+  subject: string
+  body: string
+}
+
+export async function updateCampaignEmailTemplate({
+  campaignId,
+  subject,
+  body,
+}: UpdateCampaignEmailTemplateInput): Promise<CampaignEmailTemplate> {
+  const trimmedSubject = subject.trim()
+  const trimmedBody = body.trim()
+
+  if (!trimmedSubject) throw new Error('Subject is required.')
+  if (!trimmedBody) throw new Error('Body is required.')
+
+  const supabase = createClient()
+
+  // Read the stored template first so an edit preserves the fields the form does
+  // not show (the original AI context, when it was generated) instead of
+  // trusting whatever the client happens to be holding.
+  const { data: existing, error: existingError } = await supabase
+    .from('campaigns')
+    .select('email_template')
+    .eq('id', campaignId)
+    .single()
+
+  if (existingError) throw new Error(existingError.message)
+
+  const current = parseCampaignEmailTemplate(existing.email_template)
+  const next = current
+    ? applyCampaignEmailTemplateEdit(current, {
+        subject: trimmedSubject,
+        body: trimmedBody,
+      })
+    : buildCampaignEmailTemplate({ subject: trimmedSubject, body: trimmedBody })
+
+  const payload: CampaignUpdate = { email_template: next }
+
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update(payload)
+    .eq('id', campaignId)
+    .select('email_template')
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  const saved = parseCampaignEmailTemplate(data.email_template)
+  if (!saved) throw new Error('Failed to save the email template.')
+
+  return saved
 }
 
 export type CampaignLeadRowWithLeadEmail = CampaignLeadRow & {

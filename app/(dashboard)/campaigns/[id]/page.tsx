@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Sparkles } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Pencil, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
@@ -18,11 +18,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { getCampaignById, listCampaignLeadsWithLeadEmail } from '@/lib/services/campaigns.service'
+import {
+  parseCampaignEmailTemplate,
+  type CampaignEmailTemplate,
+} from '@/lib/campaign-template'
+import {
+  getCampaignById,
+  listCampaignLeadsWithLeadEmail,
+} from '@/lib/services/campaigns.service'
 import {
   useAddLeadToCampaign,
   useAvailableLeadsForCampaign,
+  useUpdateCampaignEmailTemplate,
 } from '@/lib/hooks/useCampaigns'
+import { Input } from '@/components/ui/input'
 import type { Database } from '@/types/database'
 import Link from 'next/link'
 import { use } from 'react'
@@ -53,6 +62,7 @@ export default function CampaignDetailPage({
 }) {
   const { id } = use(params)
   const campaignId = id
+  const queryClient = useQueryClient()
 
   const {
     data: campaign,
@@ -88,10 +98,41 @@ export default function CampaignDetailPage({
   const [selectedCampaignLeadIds, setSelectedCampaignLeadIds] = React.useState<string[]>([])
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = React.useState(false)
   const [generationContext, setGenerationContext] = React.useState('')
-  const [generatedTemplate, setGeneratedTemplate] = React.useState<{
+
+  const savedTemplate = React.useMemo(
+    () => parseCampaignEmailTemplate(campaign?.email_template ?? null),
+    [campaign],
+  )
+
+  const [templateDraft, setTemplateDraft] = React.useState<{
     subject: string
     body: string
   } | null>(null)
+  const updateTemplateMutation = useUpdateCampaignEmailTemplate(campaignId)
+
+  const onStartEditingTemplate = () => {
+    if (!savedTemplate) return
+    setTemplateDraft({ subject: savedTemplate.subject, body: savedTemplate.body })
+  }
+
+  const onSaveTemplate = async () => {
+    if (!templateDraft) return
+
+    if (!templateDraft.subject.trim() || !templateDraft.body.trim()) {
+      toast.error('Subject and body cannot be empty.')
+      return
+    }
+
+    try {
+      await updateTemplateMutation.mutateAsync(templateDraft)
+      setTemplateDraft(null)
+      toast.success('Email template updated.')
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : 'Unable to update the email template.',
+      )
+    }
+  }
 
   const generateTemplateMutation = useMutation({
     mutationFn: async () => {
@@ -107,7 +148,7 @@ export default function CampaignDetailPage({
       })
 
       const data = (await response.json()) as
-        | { subject?: string; body?: string; error?: string }
+        | (Partial<CampaignEmailTemplate> & { error?: string })
         | undefined
 
       if (!response.ok) {
@@ -117,12 +158,12 @@ export default function CampaignDetailPage({
       if (!data?.subject || !data.body) {
         throw new Error('The AI response did not return a valid template.')
       }
-
-      return { subject: data.subject, body: data.body }
     },
-    onSuccess: (template) => {
-      setGeneratedTemplate(template)
-      toast.success('Email template generated.')
+    onSuccess: async () => {
+      // A regeneration replaces the stored template, so any open edit is stale.
+      setTemplateDraft(null)
+      await queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] })
+      toast.success('Email template saved to this campaign.')
     },
     onError: (error: unknown) => {
       toast.error(
@@ -177,6 +218,7 @@ export default function CampaignDetailPage({
       return
     }
 
+    setGenerationContext((prev) => prev || savedTemplate?.context || '')
     setIsGenerateDialogOpen(true)
   }
 
@@ -265,6 +307,122 @@ export default function CampaignDetailPage({
                 {new Date(campaign.created_at).toLocaleString()}
               </span>
             </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {savedTemplate ? (
+        <Card className="mb-6">
+          <CardHeader className="border-b border-border">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>Email Template</CardTitle>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">
+                  {savedTemplate.updatedAt
+                    ? `Edited ${new Date(savedTemplate.updatedAt).toLocaleString()}`
+                    : savedTemplate.generatedAt
+                      ? `Generated ${new Date(savedTemplate.generatedAt).toLocaleString()}`
+                      : null}
+                </span>
+                {templateDraft ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onStartEditingTemplate}
+                  >
+                    <Pencil className="mr-2 size-4" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            {templateDraft ? (
+              <>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="template-subject"
+                    className="text-xs uppercase tracking-wide text-muted-foreground"
+                  >
+                    Subject
+                  </label>
+                  <Input
+                    id="template-subject"
+                    value={templateDraft.subject}
+                    onChange={(event) =>
+                      setTemplateDraft((prev) =>
+                        prev ? { ...prev, subject: event.target.value } : prev,
+                      )
+                    }
+                    disabled={updateTemplateMutation.isPending}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="template-body"
+                    className="text-xs uppercase tracking-wide text-muted-foreground"
+                  >
+                    Body
+                  </label>
+                  <textarea
+                    id="template-body"
+                    className="min-h-64 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    value={templateDraft.body}
+                    onChange={(event) =>
+                      setTemplateDraft((prev) =>
+                        prev ? { ...prev, body: event.target.value } : prev,
+                      )
+                    }
+                    disabled={updateTemplateMutation.isPending}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Keep placeholders like <code>{'{{first_name}}'}</code> and{' '}
+                  <code>{'{{company}}'}</code> intact so lead data can be injected when
+                  sending.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTemplateDraft(null)}
+                    disabled={updateTemplateMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={onSaveTemplate}
+                    disabled={updateTemplateMutation.isPending}
+                  >
+                    {updateTemplateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Subject
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-foreground">
+                    {savedTemplate.subject}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Body
+                  </div>
+                  <pre className="mt-2 whitespace-pre-wrap wrap-break-word font-sans text-sm text-foreground">
+                    {savedTemplate.body}
+                  </pre>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -424,14 +582,14 @@ export default function CampaignDetailPage({
                 </p>
               </div>
 
-              {generatedTemplate ? (
+              {savedTemplate ? (
                 <div className="space-y-4">
                   <div className="rounded-lg border border-border/60 bg-background p-3">
                     <div className="text-xs uppercase tracking-wide text-muted-foreground">
                       Subject
                     </div>
                     <div className="mt-1 text-sm font-medium text-foreground">
-                      {generatedTemplate.subject}
+                      {savedTemplate.subject}
                     </div>
                   </div>
                   <div className="rounded-lg border border-border/60 bg-background p-3">
@@ -439,9 +597,15 @@ export default function CampaignDetailPage({
                       Body
                     </div>
                     <pre className="mt-2 whitespace-pre-wrap wrap-break-word font-sans text-sm text-foreground">
-                      {generatedTemplate.body}
+                      {savedTemplate.body}
                     </pre>
                   </div>
+                  {savedTemplate.generatedAt ? (
+                    <div className="text-xs text-muted-foreground">
+                      Saved to this campaign on{' '}
+                      {new Date(savedTemplate.generatedAt).toLocaleString()}
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-border px-4 text-center text-sm text-muted-foreground">
@@ -467,7 +631,9 @@ export default function CampaignDetailPage({
             >
               {generateTemplateMutation.isPending
                 ? 'Generating...'
-                : 'Generate Email Template'}
+                : savedTemplate
+                  ? 'Regenerate Template'
+                  : 'Generate Email Template'}
             </Button>
           </DialogFooter>
         </DialogContent>
