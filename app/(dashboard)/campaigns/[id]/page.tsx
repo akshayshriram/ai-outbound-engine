@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Sparkles } from 'lucide-react'
+import { Pencil, Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   parseCampaignEmailTemplate,
+  renderCampaignEmailTemplate,
   type CampaignEmailTemplate,
 } from '@/lib/campaign-template'
 import {
@@ -29,8 +30,10 @@ import {
 import {
   useAddLeadToCampaign,
   useAvailableLeadsForCampaign,
+  useSendCampaignEmails,
   useUpdateCampaignEmailTemplate,
 } from '@/lib/hooks/useCampaigns'
+import { useEmailAccounts } from '@/lib/hooks/useEmailAccounts'
 import { Input } from '@/components/ui/input'
 import type { Database } from '@/types/database'
 import Link from 'next/link'
@@ -98,6 +101,11 @@ export default function CampaignDetailPage({
   const [selectedCampaignLeadIds, setSelectedCampaignLeadIds] = React.useState<string[]>([])
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = React.useState(false)
   const [generationContext, setGenerationContext] = React.useState('')
+  const [isSendDialogOpen, setIsSendDialogOpen] = React.useState(false)
+
+  const sendEmailsMutation = useSendCampaignEmails(campaignId)
+  const { accounts: emailAccounts } = useEmailAccounts()
+  const sendingAccount = emailAccounts.find((account) => account.status === 'connected')
 
   const savedTemplate = React.useMemo(
     () => parseCampaignEmailTemplate(campaign?.email_template ?? null),
@@ -212,6 +220,64 @@ export default function CampaignDetailPage({
     [campaignLeads, selectedCampaignLeadIds],
   )
 
+  // Previewed with the first selected lead, using the same renderer the send
+  // route uses, so the preview cannot drift from what actually goes out.
+  const previewLead = selectedLeads[0] ?? null
+  const sendPreview = React.useMemo(
+    () =>
+      savedTemplate && previewLead
+        ? renderCampaignEmailTemplate(savedTemplate, previewLead.leads)
+        : null,
+    [previewLead, savedTemplate],
+  )
+
+  const onOpenSendDialog = () => {
+    if (!savedTemplate) {
+      toast.error('Generate an email template before sending.')
+      return
+    }
+
+    if (selectedCampaignLeadIds.length === 0) {
+      toast.error('Select at least one campaign lead to email.')
+      return
+    }
+
+    setIsSendDialogOpen(true)
+  }
+
+  const onSendEmails = async () => {
+    try {
+      const result = await sendEmailsMutation.mutateAsync({
+        campaignLeadIds: selectedCampaignLeadIds,
+      })
+
+      if (result.sent > 0) {
+        toast.success(
+          `Sent ${result.sent} email${result.sent === 1 ? '' : 's'} from ${result.from}.`,
+        )
+      }
+
+      if (result.skipped > 0) {
+        toast.info(`${result.skipped} lead(s) were already contacted and were skipped.`)
+      }
+
+      result.results
+        .filter((entry) => entry.status === 'failed')
+        .forEach((entry) => toast.error(`${entry.email}: ${entry.detail ?? 'Send failed.'}`))
+
+      // Delivered, but the audit row could not be written.
+      result.results
+        .filter((entry) => entry.status === 'sent' && entry.detail)
+        .forEach((entry) => toast.warning(`${entry.email}: ${entry.detail}`))
+
+      if (result.failed === 0) {
+        setIsSendDialogOpen(false)
+      }
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Unable to send the email.')
+    }
+  }
+
   const onOpenGenerateDialog = () => {
     if (selectedCampaignLeadIds.length === 0) {
       toast.error('Select at least one campaign lead to generate a template.')
@@ -257,6 +323,16 @@ export default function CampaignDetailPage({
           >
             <Sparkles className="mr-2 size-4" />
             Generate Emails
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onOpenSendDialog}
+            disabled={!savedTemplate || selectedCampaignLeadIds.length === 0}
+          >
+            <Send className="mr-2 size-4" />
+            Send Email
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/campaigns">Back</Link>
@@ -634,6 +710,115 @@ export default function CampaignDetailPage({
                 : savedTemplate
                   ? 'Regenerate Template'
                   : 'Generate Email Template'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="size-5 text-primary" />
+              Send Campaign Email
+            </DialogTitle>
+            <DialogDescription>
+              Placeholders are filled from each lead&apos;s own record. Previewed below
+              with {previewLead?.leads.email ?? 'the first selected lead'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[460px] space-y-4 overflow-y-auto">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border bg-muted/20 p-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  From
+                </div>
+                <div className="mt-1 text-sm font-medium text-foreground">
+                  {sendingAccount?.email ?? 'No Gmail account connected'}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-muted/20 p-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Recipients
+                </div>
+                <div className="mt-1 text-sm font-medium text-foreground">
+                  {selectedLeads.length} lead{selectedLeads.length === 1 ? '' : 's'}
+                </div>
+              </div>
+            </div>
+
+            {!sendingAccount ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                Connect a Gmail account in{' '}
+                <Link className="underline" href="/settings/email-accounts">
+                  Settings
+                </Link>{' '}
+                before sending.
+              </div>
+            ) : null}
+
+            {sendPreview && sendPreview.unresolved.length > 0 ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm">
+                This lead is missing data for{' '}
+                {sendPreview.unresolved.map((key) => `{{${key}}}`).join(', ')}. Leads with
+                unresolved placeholders are skipped rather than emailed a broken message.
+              </div>
+            ) : null}
+
+            {sendPreview ? (
+              <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Subject
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-foreground">
+                    {sendPreview.subject}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Body
+                  </div>
+                  <pre className="mt-2 whitespace-pre-wrap wrap-break-word font-sans text-sm text-foreground">
+                    {sendPreview.body}
+                  </pre>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
+              <div className="text-sm font-medium">Sending to</div>
+              <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                {selectedLeads.map((lead) => (
+                  <div key={lead.id} className="flex items-center justify-between gap-3">
+                    <span>{lead.leads.email}</span>
+                    {lead.status === 'sent' ? (
+                      <Badge variant="outline">already contacted</Badge>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsSendDialogOpen(false)}
+              disabled={sendEmailsMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={onSendEmails}
+              disabled={sendEmailsMutation.isPending || !sendingAccount}
+            >
+              {sendEmailsMutation.isPending
+                ? 'Sending...'
+                : `Send ${selectedLeads.length} Email${selectedLeads.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>

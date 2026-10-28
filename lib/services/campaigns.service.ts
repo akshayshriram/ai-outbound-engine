@@ -252,3 +252,46 @@ export async function addLeadToCampaign({
   return data as CampaignLeadRow
 }
 
+
+export type SendCampaignEmailsInput = {
+  campaignId: string
+  campaignLeadIds: string[]
+  resend?: boolean
+}
+
+export type CampaignSendResult = {
+  campaignLeadId: string
+  email: string
+  status: 'sent' | 'failed' | 'skipped'
+  detail?: string
+}
+
+export type SendCampaignEmailsResponse = {
+  from: string
+  sent: number
+  failed: number
+  skipped: number
+  results: CampaignSendResult[]
+}
+
+export async function sendCampaignEmails({
+  campaignId,
+  campaignLeadIds,
+  resend,
+}: SendCampaignEmailsInput): Promise<SendCampaignEmailsResponse> {
+  const response = await fetch(`/api/campaign/${campaignId}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ campaignLeadIds, resend }),
+  })
+
+  const payload = (await response.json().catch(() => null)) as
+    | (Partial<SendCampaignEmailsResponse> & { error?: string })
+    | null
+
+  if (!response.ok) {
+    throw new Error(payload?.error ?? 'Unable to send the email.')
+  }
+
+  return payload as SendCampaignEmailsResponse
+}

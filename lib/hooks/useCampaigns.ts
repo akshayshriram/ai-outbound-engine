@@ -7,11 +7,13 @@ import {
   createCampaign,
   listAvailableLeadsForCampaign,
   listCampaigns,
+  sendCampaignEmails,
   updateCampaignEmailTemplate,
   type AddLeadToCampaignInput,
   type CampaignLeadOption,
   type CreateCampaignInput,
   type ListCampaignsParams,
+  type SendCampaignEmailsInput,
   type UpdateCampaignEmailTemplateInput,
 } from '@/lib/services/campaigns.service'
 import type { Database } from '@/types/database'
@@ -89,6 +91,19 @@ export function useAddLeadToCampaign(campaignId: string) {
           queryKey: ['campaign-available-leads', campaignId],
         }),
       ])
+    },
+  })
+}
+
+export function useSendCampaignEmails(campaignId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: Omit<SendCampaignEmailsInput, 'campaignId'>) =>
+      sendCampaignEmails({ campaignId, ...input }),
+    onSuccess: async () => {
+      // Lead rows now carry a new status and last-contacted time.
+      await queryClient.invalidateQueries({ queryKey: ['campaign-leads', campaignId] })
     },
   })
 }
